@@ -111,19 +111,7 @@ def load_business_hours(db: Session, file_path: str):
         # Read CSV file
         df = pd.read_csv(file_path)
         logger.info(f"Columns in business hours CSV: {df.columns.tolist()}")
-        
-        # Determine day column name - updated to include 'dayOfWeek'
-        day_col = None
-        for possible_name in ['day_of_week', 'day', 'dayOfWeek']:
-            if possible_name in df.columns:
-                day_col = possible_name
-                break
-                
-        if day_col is None:
-            logger.error(f"Could not find day column in {file_path}")
-            logger.info(f"Available columns: {df.columns.tolist()}")
-            return
-            
+                    
         total_records = 0
         error_count = 0
         
@@ -135,13 +123,13 @@ def load_business_hours(db: Session, file_path: str):
                     start_time_local = datetime.strptime(row['start_time_local'], '%H:%M:%S').time()
                     end_time_local = datetime.strptime(row['end_time_local'], '%H:%M:%S').time()
                 except ValueError:
-                    logger.warning(f"Invalid time format for store {row['store_id']}, day {row[day_col]}")
+                    logger.warning(f"Invalid time format for store {row['store_id']}, day {row['dayOfWeek']}")
                     error_count += 1
                     continue
                 
                 business_hours = BusinessHours(
                     store_id=str(row['store_id']),
-                    day_of_week=int(row[day_col]),
+                    day_of_week=int(row['dayOfWeek']),
                     start_time_local=start_time_local,
                     end_time_local=end_time_local
                 )

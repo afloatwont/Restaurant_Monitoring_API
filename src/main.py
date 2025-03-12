@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.encoders import jsonable_encoder
 import uuid
 import os
 from datetime import datetime
@@ -49,31 +50,53 @@ async def trigger_report(background_tasks: BackgroundTasks, db: Session = Depend
 
 @app.get("/get_report")
 async def get_report(report_id: str, db: Session = Depends(get_db)):
+    """
+    Get report status or download completed report
+    
+    Args:
+        report_id: Unique identifier for the report
+        
+    Returns:
+        - JSON response with status if report is running
+        - CSV file download if report is complete
+        - Error response if report failed or not found
+    """
     try:
         status = get_report_status(report_id, db)
+        
         if not status:
             logger.warning(f"Report with ID {report_id} not found")
             raise HTTPException(status_code=404, detail=f"Report with ID {report_id} not found")
+            
         if status.status == "Running":
             logger.info(f"Report {report_id} is still running")
-            return {"status": "Running"}
+            return JSONResponse(content={"status": "Running"})
+        
         if status.status == "Complete":
             file_path = f"reports/{report_id}.csv"
             if os.path.exists(file_path):
                 logger.info(f"Serving completed report {report_id}")
+                headers = {
+                    'Content-Disposition': f'attachment; filename="report_{report_id}.csv"',
+                    'Content-Type': 'text/csv'
+                }
                 return FileResponse(
-                    path=file_path, 
+                    path=file_path,
                     filename=f"report_{report_id}.csv",
-                    media_type="text/csv"
+                    media_type='text/csv',
+                    headers=headers
                 )
             else:
                 logger.error(f"Report file for {report_id} not found at {file_path}")
                 raise HTTPException(status_code=404, detail="Report file not found")
+        
         if status.status == "Error":
             logger.warning(f"Report {report_id} encountered an error during generation")
             raise HTTPException(status_code=500, detail="An error occurred during report generation")
+        
         logger.error(f"Unknown report status for {report_id}: {status.status}")
         raise HTTPException(status_code=500, detail=f"Unknown report status: {status.status}")
+        
     except HTTPException:
         raise
     except Exception as e:
